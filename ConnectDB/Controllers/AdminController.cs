@@ -267,6 +267,32 @@ namespace ConnectDB.Controllers
             return Ok(new { message = "Mật khẩu đã reset về 123" });
         }
 
+        [HttpPost("create-user-manual")]
+        public async Task<IActionResult> CreateUserManual([FromBody] User u)
+        {
+            if (await _context.Users.AnyAsync(x => x.Username == u.Username))
+                return BadRequest(new { message = "Username đã tồn tại!" });
+
+            u.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
+            _context.Users.Add(u);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Tạo tài khoản thành công!" });
+        }
+
+        [HttpPut("users/{id}")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] User u)
+        {
+            var userDb = await _context.Users.FindAsync(id);
+            if (userDb == null) return NotFound();
+            userDb.Username = u.Username;
+            userDb.Role = u.Role;
+            if (!string.IsNullOrEmpty(u.Password))
+                userDb.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Cập nhật thành công" });
+        }
+
+        // ================= 9. NGHIỆP VỤ ĐẶC BIỆT =================
         [HttpPut("leave-requests/approve/{id}")]
         public async Task<IActionResult> ApproveLeave(int id)
         {
