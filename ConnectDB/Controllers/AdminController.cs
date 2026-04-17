@@ -105,7 +105,6 @@ namespace ConnectDB.Controllers
                 };
                 _context.Students.Add(s);
                 await _context.SaveChangesAsync();
-
                 await transaction.CommitAsync();
                 return Ok(new { message = "Thêm sinh viên thành công!" });
             }
@@ -121,7 +120,6 @@ namespace ConnectDB.Controllers
         {
             var st = await _context.Students.Include(x => x.User).FirstOrDefaultAsync(x => x.Id == id);
             if (st == null) return NotFound();
-
             st.FullName = dto.FullName;
             st.ClassId = dto.ClassId;
             st.Birthday = dto.Birthday;
@@ -129,7 +127,6 @@ namespace ConnectDB.Controllers
             st.Phone = dto.Phone;
             st.Email = dto.Email;
             st.Address = dto.Address;
-
             await _context.SaveChangesAsync();
             return Ok(new { message = "Cập nhật thành công!" });
         }
@@ -139,7 +136,6 @@ namespace ConnectDB.Controllers
         {
             var st = await _context.Students.FindAsync(id);
             if (st == null) return NotFound();
-
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -196,7 +192,22 @@ namespace ConnectDB.Controllers
             }
         }
 
+        [HttpDelete("teachers/{id}")]
+        public async Task<IActionResult> DeleteTeacher(int id)
+        {
+            var t = await _context.Teachers.FindAsync(id);
+            if (t == null) return NotFound();
+            var user = await _context.Users.FindAsync(t.UserId);
+            _context.Teachers.Remove(t);
+            if (user != null) _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Xóa thành công" });
+        }
+
         // ================= 5. LỊCH HỌC (SCHEDULE) =================
+        [HttpGet("schedules")]
+        public async Task<IActionResult> GetSchedules() => Ok(await _context.Schedules.Include(s => s.Subject).Include(s => s.Teacher).Include(s => s.Class).ToListAsync());
+
         [HttpPost("schedules")]
         public async Task<IActionResult> AddSchedule([FromBody] ScheduleCreateDto dto)
         {
@@ -217,6 +228,9 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 6. LỚP HỌC (CLASS) =================
+        [HttpGet("classes")]
+        public async Task<IActionResult> GetClasses() => Ok(await _context.Classes.Include(c => c.Faculty).ToListAsync());
+
         [HttpPost("classes")]
         public async Task<IActionResult> AddClass([FromBody] ClassCreateDto dto)
         {
@@ -227,20 +241,42 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
+        [HttpGet("scores")]
+        public async Task<IActionResult> GetAllScores() => Ok(await _context.Scores.Include(s => s.Student).Include(s => s.Subject).ToListAsync());
+
         [HttpPost("scores")]
         public async Task<IActionResult> AddScore([FromBody] ScoreCreateDto dto)
         {
-            var s = new Score
-            {
-                Value = dto.Value,
-                StudentId = dto.StudentId,
-                SubjectId = dto.SubjectId
-            };
+            var s = new Score { Value = dto.Value, StudentId = dto.StudentId, SubjectId = dto.SubjectId };
             _context.Scores.Add(s);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Nhập điểm thành công!" });
         }
 
-        // ... Các hàm GET và Reset Password giữ nguyên như cũ ...
+        // ================= 8. HỆ THỐNG TÀI KHOẢN =================
+        [HttpGet("users")]
+        public async Task<IActionResult> GetUsers() => Ok(await _context.Users.ToListAsync());
+
+        [HttpPut("users/reset-password/{id}")]
+        public async Task<IActionResult> ResetPassword(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+            user.Password = BCrypt.Net.BCrypt.HashPassword("123");
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Mật khẩu đã reset về 123" });
+        }
+
+        [HttpPut("leave-requests/approve/{id}")]
+        public async Task<IActionResult> ApproveLeave(int id)
+        {
+            var request = await _context.LeaveRequests.FindAsync(id);
+            if (request == null) return NotFound();
+            request.Status = "Approved";
+            var busySchedules = await _context.Schedules.Where(s => s.TeacherId == request.TeacherId && s.Date.Date == request.OffDate.Date).ToListAsync();
+            foreach (var item in busySchedules) item.Note = "GIẢNG VIÊN NGHỈ - LỚP TỰ HỌC";
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Duyệt nghỉ thành công!" });
+        }
     }
 }
