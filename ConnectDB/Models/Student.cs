@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-
+using System.Text.Json.Serialization;
 namespace ConnectDB.Models
 {
     public class Student
@@ -42,7 +42,7 @@ namespace ConnectDB.Models
 
         // Liên kết với Lớp học
         public int ClassId { get; set; }
-
+        [JsonIgnore]
         [ForeignKey("ClassId")]
         public Class? Class { get; set; }
 
