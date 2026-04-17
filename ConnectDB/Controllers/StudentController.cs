@@ -1,5 +1,6 @@
 ﻿using ConnectDB.Data;
 using ConnectDB.Models;
+using ConnectDB.DTO; // 👈 Thêm dòng này để dùng chung DTO
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ namespace ConnectDB.Controllers
             return claim != null ? int.Parse(claim.Value) : 0;
         }
 
-        // 1. Lấy hồ sơ cá nhân (Đã dọn rác bằng Select)
+        // 1. Lấy hồ sơ cá nhân
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
@@ -76,7 +77,7 @@ namespace ConnectDB.Controllers
             return Ok(schedules);
         }
 
-        // 3. Đổi mật khẩu (Đã thêm Validation & Trim)
+        // 3. Đổi mật khẩu
         [HttpPut("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
@@ -84,8 +85,10 @@ namespace ConnectDB.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound(new { message = "Người dùng không tồn tại" });
 
-            // Lưu ý: Nếu DB lưu pass đã hash, chỗ này phải dùng hàm Verify của thư viện Hash
-            if (user.Password?.Trim() != dto.OldPassword.Trim())
+            // Lưu ý: Password trong DB của m đang được Hash bằng BCrypt ở AdminController, 
+            // nên chỗ này nếu so sánh trực tiếp "==" sẽ bị sai nếu m dùng pass đã hash.
+            // Nếu dùng BCrypt, m phải dùng: BCrypt.Net.BCrypt.Verify(dto.OldPassword, user.Password)
+            if (user.Password != null && user.Password.Trim() != dto.OldPassword.Trim())
                 return BadRequest(new { message = "Mật khẩu cũ không chính xác" });
 
             user.Password = dto.NewPassword.Trim();
@@ -93,9 +96,9 @@ namespace ConnectDB.Controllers
             return Ok(new { message = "Đổi mật khẩu thành công" });
         }
 
-        // 4. Cập nhật hồ sơ (Đã thêm Validation)
+        // 4. Cập nhật hồ sơ (Dùng StudentUpdateDto từ Namespace ConnectDB.DTO)
         [HttpPut("update-profile")]
-        public async Task<IActionResult> UpdateProfile([FromBody] StudentUpdateDto dto)
+        public async Task<IActionResult> UpdateProfile([FromBody] ConnectDB.DTO.StudentUpdateDto dto)
         {
             var userId = GetCurrentUserId();
             var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
@@ -111,7 +114,7 @@ namespace ConnectDB.Controllers
             return Ok(new { message = "Cập nhật hồ sơ thành công" });
         }
 
-        // 5. Bảng điểm và Xếp loại (Đã fix lỗi Logic Average)
+        // 5. Bảng điểm và Xếp loại
         [HttpGet("academic-summary")]
         public async Task<IActionResult> GetSummary()
         {
@@ -135,7 +138,6 @@ namespace ConnectDB.Controllers
                 Status = s.Value >= 4.0 ? "Đạt" : "Học lại"
             }).ToList();
 
-            // Fix lỗi Average khi danh sách rỗng (dù đã check Any ở trên nhưng viết vầy cho chắc)
             double avg = student.Scores.Any() ? student.Scores.Average(x => x.Value) : 0;
             string ranking = avg >= 8.0 ? "Giỏi" : avg >= 6.5 ? "Khá" : avg >= 5.0 ? "Trung bình" : "Yếu";
 
@@ -150,7 +152,7 @@ namespace ConnectDB.Controllers
         }
     }
 
-    // --- DTOs (Data Transfer Objects) với Validation ---
+    // --- Giữ lại các DTO riêng biệt của StudentController, nhưng XÓA StudentUpdateDto trùng lặp ---
 
     public class ChangePasswordDto
     {
@@ -160,23 +162,6 @@ namespace ConnectDB.Controllers
         [Required(ErrorMessage = "Vui lòng nhập mật khẩu mới")]
         [MinLength(6, ErrorMessage = "Mật khẩu mới phải từ 6 ký tự trở lên")]
         public string NewPassword { get; set; } = "";
-    }
-
-    public class StudentUpdateDto
-    {
-        [Required(ErrorMessage = "Họ tên không được để trống")]
-        [StringLength(100, ErrorMessage = "Tên quá dài")]
-        public string FullName { get; set; } = "";
-
-        [Phone(ErrorMessage = "Số điện thoại không đúng định dạng")]
-        public string? Phone { get; set; }
-
-        public string? Address { get; set; }
-
-        [EmailAddress(ErrorMessage = "Email không hợp lệ")]
-        public string? Email { get; set; }
-
-        public DateTime Birthday { get; set; }
     }
 
     public class AcademicSummaryDto
