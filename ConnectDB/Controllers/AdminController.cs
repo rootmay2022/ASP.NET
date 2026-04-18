@@ -242,15 +242,22 @@ namespace ConnectDB.Controllers
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
         [HttpGet("scores")]
-        public async Task<IActionResult> GetAllScores() => Ok(await _context.Scores.Include(s => s.Student).Include(s => s.Subject).ToListAsync());
-
-        [HttpPost("scores")]
-        public async Task<IActionResult> AddScore([FromBody] ScoreCreateDto dto)
+        public async Task<IActionResult> GetAllScores()
         {
-            var s = new Score { Value = dto.Value, StudentId = dto.StudentId, SubjectId = dto.SubjectId };
-            _context.Scores.Add(s);
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Nhập điểm thành công!" });
+            var result = await _context.Scores
+                .Include(s => s.Student)
+                .Include(s => s.Subject)
+                .Select(s => new
+                {
+                    Id = s.Id,
+                    Value = s.Value,
+                    StudentName = s.Student.FullName, // Lấy tên SV thay vì chỉ lấy ID
+                    SubjectName = s.Subject.SubjectName, // Lấy tên môn học
+                    Credits = s.Subject.Credits
+                })
+                .ToListAsync();
+
+            return Ok(result);
         }
 
         // ================= 8. HỆ THỐNG TÀI KHOẢN =================
