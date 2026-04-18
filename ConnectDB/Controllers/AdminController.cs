@@ -259,7 +259,22 @@ namespace ConnectDB.Controllers
 
             return Ok(result);
         }
+        [HttpGet("scores/student/{studentId}")]
+        public async Task<IActionResult> GetScoreByStudent(int studentId)
+        {
+            var scores = await _context.Scores
+                .Where(s => s.StudentId == studentId) // Lọc đúng ID m cần
+                .Include(s => s.Subject)
+                .Select(s => new {
+                    s.Id,
+                    s.Value,
+                    SubjectName = s.Subject.SubjectName,
+                    s.Subject.Credits
+                })
+                .ToListAsync();
 
+            return Ok(scores);
+        }
         // ================= 8. HỆ THỐNG TÀI KHOẢN =================
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers() => Ok(await _context.Users.ToListAsync());
