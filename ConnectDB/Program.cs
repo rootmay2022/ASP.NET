@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +13,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-// --- 2. Cấu hình CORS (Mở cửa cho Frontend) ---
+// --- 2. Cấu hình CORS (Mở cửa hoàn toàn cho Frontend) ---
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAll", policy => {
         policy.AllowAnyOrigin()
@@ -27,8 +26,10 @@ builder.Services.AddCors(options => {
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
+        // Chống vòng lặp vô tận khi trả về JSON
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        // Đảm bảo Frontend nhận key kiểu camelCase (fullName thay vì FullName)
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 
 // --- 4. Cấu hình Swagger ---
@@ -79,22 +80,23 @@ builder.Services.AddAuthentication(options => {
 
 builder.Services.AddAuthorization();
 
-// ĐẶC BIỆT CHO RENDER
+// --- 6. CẤU HÌNH CỔNG CHO RENDER ---
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
-// --- 6. CẤU HÌNH MIDDLEWARE (THỨ TỰ RẤT QUAN TRỌNG) ---
+// --- 7. CẤU HÌNH MIDDLEWARE (THỨ TỰ RẤT QUAN TRỌNG) ---
 
+// Swagger luôn chạy để m dễ debug
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Hệ thống Quản lý Sinh viên V1");
-    c.RoutePrefix = string.Empty;
+    c.RoutePrefix = string.Empty; // Để vào thẳng trang chính là thấy Swagger
 });
 
-// Phải gọi UseCors TRƯỚC Authentication/Authorization
+// QUAN TRỌNG: UseCors phải nằm trước Authentication và Authorization
 app.UseCors("AllowAll");
 
 app.UseAuthentication();
