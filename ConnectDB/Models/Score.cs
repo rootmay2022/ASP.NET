@@ -1,18 +1,17 @@
-﻿using ConnectDB.Models;
-using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
-public class Score
+﻿public class Score
 {
-    [Key]
     public int Id { get; set; }
-    public double Value { get; set; }
-
     public int StudentId { get; set; }
-    // Thêm dấu ? ở đây để hết lỗi "Non-nullable"
-    [JsonIgnore]
-    public Student? Student { get; set; }
-
     public int SubjectId { get; set; }
-    // Thêm dấu ? ở đây
-    public Subject? Subject { get; set; }
+
+    public float KT1 { get; set; }
+    public float KT2 { get; set; }
+    public float DiemThi { get; set; }
+
+    // Thuộc tính tính toán (Read-only hoặc tính trước khi lưu)
+    public float DiemTrungBinh { get; set; }
+    public string KetQua { get; set; }
+
+    public Student Student { get; set; }
+    public Subject Subject { get; set; }
 }

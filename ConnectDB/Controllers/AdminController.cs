@@ -252,6 +252,9 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
+        // ================= 7. ĐIỂM SỐ (SCORE) =================
+
+        // Hàm lấy tất cả điểm (cho Admin xem)
         [HttpGet("scores")]
         public async Task<IActionResult> GetAllScores()
         {
@@ -260,35 +263,71 @@ namespace ConnectDB.Controllers
                 .Include(s => s.Subject)
                 .Select(s => new
                 {
-                    Id = s.Id,
-                    Value = s.Value,
-                    StudentName = s.Student.FullName, // Lấy tên SV thay vì chỉ lấy ID
-                    SubjectName = s.Subject.SubjectName, // Lấy tên môn học
+                    s.Id,
+                    StudentName = s.Student.FullName,
+                    SubjectName = s.Subject.SubjectName,
+                    s.KT1,
+                    s.KT2,
+                    s.DiemThi,
+                    s.DiemTrungBinh,
+                    s.KetQua,
                     Credits = s.Subject.Credits
                 })
                 .ToListAsync();
 
             return Ok(result);
         }
+
+        // Hàm lấy điểm riêng cho từng sinh viên (Dùng cho Frontend Sinh viên)
         [HttpGet("scores/student/{studentId}")]
         public async Task<IActionResult> GetScoreByStudent(int studentId)
         {
             var scores = await _context.Scores
                 .Where(s => s.StudentId == studentId)
                 .Include(s => s.Subject)
-                .Include(s => s.Student) // Thêm cái này để lấy tên SV
                 .Select(s => new {
                     s.Id,
-                    Value = s.Value,
-                    StudentName = s.Student.FullName,
                     SubjectName = s.Subject.SubjectName,
+                    s.KT1,
+                    s.KT2,
+                    s.DiemThi,
+                    s.DiemTrungBinh,
+                    s.KetQua,
                     Credits = s.Subject.Credits
                 })
                 .ToListAsync();
 
-            if (!scores.Any()) return NotFound(new { message = "Sinh viên này chưa có điểm môn nào!" });
+            if (!scores.Any()) return NotFound(new { message = "Mưa chưa có điểm môn nào đâu m ơi!" });
 
             return Ok(scores);
+        }
+
+        // Hàm Thêm/Cập nhật điểm mới (Có logic tính toán tự động)
+        [HttpPost("scores")]
+        public async Task<IActionResult> UpdateScore([FromBody] ScoreDto dto)
+        {
+            // Kiểm tra xem đã có bản ghi điểm này chưa (1 SV - 1 Môn chỉ 1 dòng điểm)
+            var score = await _context.Scores
+                .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId && s.SubjectId == dto.SubjectId);
+
+            if (score == null)
+            {
+                score = new Score { StudentId = dto.StudentId, SubjectId = dto.SubjectId };
+                _context.Scores.Add(score);
+            }
+
+            // Gán điểm thành phần
+            score.KT1 = dto.KT1;
+            score.KT2 = dto.KT2;
+            score.DiemThi = dto.DiemThi;
+
+            // --- LOGIC TÍNH TOÁN ---
+            // Công thức: (KT1 + KT2 + Thi*2) / 4. M có thể đổi tùy ý.
+            score.DiemTrungBinh = (float)Math.Round((score.KT1 + score.KT2 + score.DiemThi * 2) / 4, 1);
+            score.KetQua = score.DiemTrungBinh >= 5 ? "Qua môn" : "Học lại";
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã cập nhật điểm và tính toán xong!", dtb = score.DiemTrungBinh, ketQua = score.KetQua });
         }
         // ================= 8. HỆ THỐNG TÀI KHOẢN =================
         [HttpGet("users")]

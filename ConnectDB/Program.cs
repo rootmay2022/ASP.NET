@@ -5,25 +5,16 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- 1. ĐỔI SANG ĐĂNG KÝ MYSQL (Dùng Pomelo) ---
+// --- 1. ĐĂNG KÝ MYSQL ---
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-// --- 2. Cấu hình Controllers & JSON ---
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-    });
-
-// --- 3. Cấu hình CORS ---
+// --- 2. Cấu hình CORS (Mở cửa cho Frontend) ---
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAll", policy => {
         policy.AllowAnyOrigin()
@@ -32,11 +23,18 @@ builder.Services.AddCors(options => {
     });
 });
 
+// --- 3. Cấu hình Controllers & JSON ---
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
+
 // --- 4. Cấu hình Swagger ---
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c => {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Hệ thống Quản lý Sinh viên-NGUYỄN KHÁNH HÙNG", Version = "v1" });
-
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Hệ thống Quản lý Sinh viên - NGUYỄN KHÁNH HÙNG", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Nhập Token theo cú pháp: Bearer [token]",
@@ -45,7 +43,6 @@ builder.Services.AddSwaggerGen(c => {
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-
     c.AddSecurityRequirement(new OpenApiSecurityRequirement {
         {
             new OpenApiSecurityScheme {
@@ -60,8 +57,6 @@ builder.Services.AddSwaggerGen(c => {
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "Chuoi_Key_Mac_Dinh_Sieu_Dai_Phai_Tren_32_Ky_Tu";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ConnectDB_Server";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ConnectDB_Client";
-
-System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 builder.Services.AddAuthentication(options => {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -84,15 +79,14 @@ builder.Services.AddAuthentication(options => {
 
 builder.Services.AddAuthorization();
 
-// ĐẶC BIỆT CHO RENDER: Ép app lắng nghe trên cổng biến PORT
+// ĐẶC BIỆT CHO RENDER
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
-// --- 6. Cấu hình Middleware ---
+// --- 6. CẤU HÌNH MIDDLEWARE (THỨ TỰ RẤT QUAN TRỌNG) ---
 
-// Luôn bật Swagger bất kể môi trường nào
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -100,10 +94,12 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty;
 });
 
+// Phải gọi UseCors TRƯỚC Authentication/Authorization
 app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
 app.Run();
