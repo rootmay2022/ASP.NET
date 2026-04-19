@@ -206,12 +206,23 @@ namespace ConnectDB.Controllers
 
         // ================= 5. LỊCH HỌC (SCHEDULE) =================
         [HttpGet("schedules")]
-        public async Task<IActionResult> GetSchedules()
+        public async Task<IActionResult> GetSchedules([FromQuery] int? classId = null)
         {
-            var result = await _context.Schedules
+            // 1. Tạo query cơ bản
+            var query = _context.Schedules
                 .Include(s => s.Subject)
                 .Include(s => s.Teacher)
                 .Include(s => s.Class)
+                .AsQueryable();
+
+            // 2. Nếu người dùng có truyền classId lên thì lọc theo lớp đó
+            if (classId.HasValue)
+            {
+                query = query.Where(s => s.ClassId == classId.Value);
+            }
+
+            // 3. Select ra dữ liệu sạch và trả về
+            var result = await query
                 .Select(s => new {
                     s.Id,
                     Học_Ngày = s.LearnDate,
@@ -222,6 +233,7 @@ namespace ConnectDB.Controllers
                     Lớp = s.Class.ClassName,
                     Ghi_Chú = s.Note
                 })
+                .OrderBy(s => s.Học_Ngày) // Sắp xếp theo ngày cho dễ nhìn
                 .ToListAsync();
 
             return Ok(result);
