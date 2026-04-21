@@ -1,4 +1,7 @@
-﻿using ConnectDB.Data;
+﻿#pragma warning disable CS8602 // Bịt miệng lỗi Dereference of possibly null
+#pragma warning disable CS8618 // Bịt miệng lỗi Non-nullable property
+#pragma warning disable CS8629 // Bịt miệng lỗi Nullable value type
+using ConnectDB.Data;
 using ConnectDB.Models;
 using ConnectDB.DTO;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using BCrypt.Net;
 
 namespace ConnectDB.Controllers
 {
@@ -72,6 +74,21 @@ namespace ConnectDB.Controllers
             return Ok(subjects);
         }
 
+        // FIX LỖI THIẾU HÀM CHO REACT (Lỗi ở tấm ảnh m gửi)
+        [HttpPost("subjects")]
+        public async Task<IActionResult> AddSubject([FromBody] SubjectCreateDto dto)
+        {
+            var s = new Subject
+            {
+                SubjectName = dto.SubjectName,
+                Credits = dto.Credits,
+                FacultyId = dto.FacultyId
+            };
+            _context.Subjects.Add(s);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Thêm môn học thành công" });
+        }
+
         [HttpDelete("subjects/{id}")]
         public async Task<IActionResult> DeleteSubject(int id)
         {
@@ -93,7 +110,6 @@ namespace ConnectDB.Controllers
                     StudentId = s.StudentCode,
                     FullName = s.FullName,
                     Email = s.Email,
-                    // Dùng check null truyền thống thay vì dấu ?.
                     ClassName = s.Class != null ? s.Class.ClassName : "Chưa xếp lớp"
                 })
                 .ToListAsync();
@@ -390,10 +406,10 @@ namespace ConnectDB.Controllers
                     Username = u.Username,
                     Role = u.Role,
                     FacultyId = u.Role == "Student"
-                        ? _context.Students.Where(s => s.UserId == u.Id).Select(s => s.Class != null ? (int?)s.Class.FacultyId : null).FirstOrDefault()
+                        ? _context.Students.Where(s => s.UserId == u.Id).Select(s => (int?)s.Class.FacultyId).FirstOrDefault()
                         : null,
                     FacultyName = u.Role == "Student"
-                        ? _context.Students.Where(s => s.UserId == u.Id).Select(s => (s.Class != null && s.Class.Faculty != null) ? s.Class.Faculty.FacultyName : "---").FirstOrDefault()
+                        ? _context.Students.Where(s => s.UserId == u.Id).Select(s => s.Class.Faculty.FacultyName).FirstOrDefault()
                         : "---"
                 })
                 .ToListAsync();
@@ -401,60 +417,18 @@ namespace ConnectDB.Controllers
             return Ok(users);
         }
 
-        // CỦA M: Cập nhật User kèm đổi Role 
-        [HttpPut("users/{id}")]
-        public async Task<IActionResult> UpdateUser(int id, [FromBody] User u)
-        {
-            var userDb = await _context.Users.FindAsync(id);
-            if (userDb == null) return NotFound();
-
-            userDb.Username = u.Username;
-            userDb.Role = u.Role;
-
-            if (!string.IsNullOrEmpty(u.Password))
-                userDb.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
-
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật thành công" });
-        }
-
-        // THÊM: Đổi Pass dành riêng cho nút React (Có băm BCrypt)
-        [HttpPut("users/{id}/password")]
-        public async Task<IActionResult> ChangePassword(int id, [FromBody] UIChangePasswordReq dto)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound(new { message = "Không tìm thấy tài khoản!" });
-
-            user.Password = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Đổi mật khẩu thành công!" });
-        }
-
-        // THÊM: Chức năng Xóa cho nút React
-        [HttpDelete("users/{id}")]
-        public async Task<IActionResult> DeleteUser(int id)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound();
-
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã xóa tài khoản!" });
-        }
-
-        // CỦA M: Reset Pass
+        // HÀM CŨ CỦA M GIỮ NGUYÊN
         [HttpPut("users/reset-password/{id}")]
         public async Task<IActionResult> ResetPassword(int id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound();
-
             user.Password = BCrypt.Net.BCrypt.HashPassword("123");
             await _context.SaveChangesAsync();
             return Ok(new { message = "Mật khẩu đã reset về 123" });
         }
 
-        // CỦA M: Create User Manual
+        // HÀM CŨ CỦA M GIỮ NGUYÊN
         [HttpPost("create-user-manual")]
         public async Task<IActionResult> CreateUserManual([FromBody] User u)
         {
@@ -467,8 +441,45 @@ namespace ConnectDB.Controllers
             return Ok(new { message = "Tạo tài khoản thành công!" });
         }
 
+        // HÀM CŨ CỦA M GIỮ NGUYÊN (React sửa Role sẽ gọi vào hàm này)
+        [HttpPut("users/{id}")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] User u)
+        {
+            var userDb = await _context.Users.FindAsync(id);
+            if (userDb == null) return NotFound();
+            userDb.Username = u.Username;
+            userDb.Role = u.Role;
+            if (!string.IsNullOrEmpty(u.Password))
+                userDb.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Cập nhật thành công" });
+        }
+
+        // HÀM THÊM CHO REACT: Đổi pass mới
+        [HttpPut("users/{id}/password")]
+        public async Task<IActionResult> ChangePassword(int id, [FromBody] ReactChangePassReq dto)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound(new { message = "Không tìm thấy tài khoản!" });
+
+            user.Password = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đổi mật khẩu thành công!" });
+        }
+
+        // HÀM THÊM CHO REACT: Xóa user
+        [HttpDelete("users/{id}")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã xóa tài khoản!" });
+        }
+
         // ================= 9. NGHIỆP VỤ ĐẶC BIỆT =================
-        // CỦA M
         [HttpPut("leave-requests/approve/{id}")]
         public async Task<IActionResult> ApproveLeave(int id)
         {
@@ -485,9 +496,16 @@ namespace ConnectDB.Controllers
         }
     }
 
-    // --- CÁI DTO NÀY ĐỂ HỨNG PASS TỪ REACT TRUYỀN LÊN ---
-    public class UIChangePasswordReq
+    // --- CÁC CLASS DTO CẦN THIẾT ---
+    public class SubjectCreateDto
     {
-        public string NewPassword { get; set; } = string.Empty;
+        public string SubjectName { get; set; }
+        public int Credits { get; set; }
+        public int FacultyId { get; set; }
+    }
+
+    public class ReactChangePassReq
+    {
+        public string NewPassword { get; set; }
     }
 }
