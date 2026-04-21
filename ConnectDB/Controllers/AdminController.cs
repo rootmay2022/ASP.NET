@@ -342,7 +342,7 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
-        // 1. LẤY TẤT CẢ ĐIỂM (Dùng cho bảng quản lý chung)
+        // 1. LẤY TẤT CẢ ĐIỂM
         [HttpGet("scores")]
         public async Task<IActionResult> GetAllScores()
         {
@@ -352,96 +352,80 @@ namespace ConnectDB.Controllers
                 .Select(s => new
                 {
                     s.Id,
-                    StudentId = s.StudentId, // Trả về ID để React biết đường mà POST
-                    SubjectId = s.SubjectId,
-                    StudentName = s.Student != null ? s.Student.FullName : "---",
-                    SubjectName = s.Subject != null ? s.Subject.SubjectName : "---",
-                    s.KT1,
-                    s.KT2,
-                    s.DiemThi,
-                    s.DiemTrungBinh,
-                    s.KetQua,
-                    Credits = s.Subject != null ? s.Subject.Credits : 0
+                    // Trả về tên biến viết thường chữ cái đầu để khớp với JS/React
+                    studentId = s.StudentId,
+                    subjectId = s.SubjectId,
+                    studentName = s.Student != null ? s.Student.FullName : "---",
+                    subjectName = s.Subject != null ? s.Subject.SubjectName : "---",
+                    kT1 = s.KT1,
+                    kT2 = s.KT2,
+                    diemThi = s.DiemThi,
+                    diemTrungBinh = s.DiemTrungBinh,
+                    ketQua = s.KetQua,
+                    credits = s.Subject != null ? s.Subject.Credits : 0
                 })
                 .ToListAsync();
 
             return Ok(result);
         }
 
-        // 2. LẤY ĐIỂM RIÊNG CỦA 1 SINH VIÊN (Bơm thêm ID vào đây cho tao)
-        [HttpGet("scores/student/{studentId}")]
-        public async Task<IActionResult> GetScoreByStudent(int studentId)
-        {
-            var scores = await _context.Scores
-                .Where(s => s.StudentId == studentId)
-                .Include(s => s.Subject)
-                .Select(s => new {
-                    s.Id,
-                    StudentId = s.StudentId, // Phải có cái này
-                    SubjectId = s.SubjectId, // Và cái này để React nó map dữ liệu
-                    SubjectName = s.Subject != null ? s.Subject.SubjectName : "---",
-                    s.KT1,
-                    s.KT2,
-                    s.DiemThi,
-                    s.DiemTrungBinh,
-                    s.KetQua,
-                    Credits = s.Subject != null ? s.Subject.Credits : 0
-                })
-                .ToListAsync();
-
-            if (!scores.Any()) return NotFound(new { message = "Sinh viên chưa có điểm môn nào!" });
-
-            return Ok(scores);
-        }
-
-        // 3. CẬP NHẬT HOẶC THÊM MỚI ĐIỂM (Đã check kỹ logic)
+        // 2. CẬP NHẬT HOẶC THÊM MỚI ĐIỂM
         [HttpPost("scores")]
         public async Task<IActionResult> UpdateScore([FromBody] ScoreDto dto)
         {
-            // 1. CHẶN LỖI NULL: Nếu không có dữ liệu gửi lên thì báo lỗi ngay
-            if (dto == null)
-                return BadRequest(new { message = "Lỗi: Không nhận được dữ liệu điểm!" });
+            if (dto == null) return BadRequest(new { message = "Dữ liệu gửi lên bị trống!" });
+            if (dto.StudentId <= 0 || dto.SubjectId <= 0) return BadRequest(new { message = "ID Sinh viên hoặc Môn học không hợp lệ!" });
 
-            // 2. CHẶN ID GIẢ: Nếu ID bằng 0 hoặc âm thì không cho lưu
-            if (dto.StudentId <= 0 || dto.SubjectId <= 0)
-                return BadRequest(new { message = "Lỗi: ID Sinh viên hoặc Môn học không hợp lệ!" });
-
-            // Tìm xem đã có dòng điểm này chưa
-            var score = await _context.Scores
-                .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId && s.SubjectId == dto.SubjectId);
-
-            if (score == null)
+            try
             {
-                // Nếu chưa có thì tạo mới dòng điểm
-                score = new Score
+                // Tìm bản ghi điểm đã tồn tại
+                var score = await _context.Scores
+                    .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId && s.SubjectId == dto.SubjectId);
+
+                bool isNew = false;
+                if (score == null)
                 {
-                    StudentId = dto.StudentId,
-                    SubjectId = dto.SubjectId
-                };
-                _context.Scores.Add(score);
+                    isNew = true;
+                    score = new Score
+                    {
+                        StudentId = dto.StudentId,
+                        SubjectId = dto.SubjectId
+                    };
+                }
+
+                // Gán dữ liệu điểm
+                score.KT1 = dto.KT1;
+                score.KT2 = dto.KT2;
+                score.DiemThi = dto.DiemThi;
+
+                // Tính toán: (KT1 + KT2 + Thi*2) / 4
+                score.DiemTrungBinh = (float)Math.Round((score.KT1 + score.KT2 + score.DiemThi * 2) / 4, 1);
+                score.KetQua = score.DiemTrungBinh >= 5 ? "Qua môn" : "Học lại";
+
+                if (isNew)
+                {
+                    _context.Scores.Add(score);
+                }
+                else
+                {
+                    _context.Scores.Update(score);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Đã lưu điểm và tính toán xong!",
+                    dtb = score.DiemTrungBinh,
+                    ketQua = score.KetQua
+                });
             }
-
-            // Gán điểm (Nhớ đảm bảo KT1, KT2, DiemThi trong DTO là kiểu float)
-            score.KT1 = dto.KT1;
-            score.KT2 = dto.KT2;
-            score.DiemThi = dto.DiemThi;
-
-            // 3. TÍNH TOÁN: (KT1 + KT2 + Thi*2) / 4 và làm tròn 1 chữ số thập phân
-            score.DiemTrungBinh = (float)Math.Round((score.KT1 + score.KT2 + score.DiemThi * 2) / 4, 1);
-
-            // Tự động xếp loại
-            score.KetQua = score.DiemTrungBinh >= 5 ? "Qua môn" : "Học lại";
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
+            catch (Exception ex)
             {
-                message = "Đã cập nhật điểm và tính toán xong!",
-                dtb = score.DiemTrungBinh,
-                ketQua = score.KetQua
-            });
+                // Trả về lỗi chi tiết nếu Database bị từ chối lưu
+                return StatusCode(500, new { message = "Lỗi Database: " + ex.Message });
+            }
         }
-
         // ================= 8. HỆ THỐNG TÀI KHOẢN (USERS) =================
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers()
