@@ -92,24 +92,50 @@ namespace ConnectDB.Controllers
             return Ok(new { message = "Đổi mật khẩu thành công" });
         }
 
-        // 4. Cập nhật hồ sơ
-        [HttpPut("update-profile")]
-        public async Task<IActionResult> UpdateProfile([FromBody] ConnectDB.DTO.StudentUpdateDto dto)
-        {
-            var userId = GetCurrentUserId();
-            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
-            if (student == null) return NotFound(new { message = "Không tìm thấy sinh viên" });
+     
+        // 4. Cập nhật hồ sơ Sinh viên
+            [HttpPut("update-profile")]
+            public async Task<IActionResult> UpdateProfile([FromBody] ConnectDB.DTO.StudentUpdateDto dto)
+            {
+                // 1. Lấy ID người dùng đang đăng nhập
+                var userId = GetCurrentUserId();
+                if (userId <= 0) return Unauthorized(new { message = "Bạn chưa đăng nhập!" });
 
-            student.FullName = dto.FullName.Trim();
-            student.Phone = dto.Phone?.Trim();
-            student.Address = dto.Address?.Trim();
-            student.Email = dto.Email?.Trim();
-            student.Birthday = dto.Birthday;
+                // 2. Tìm sinh viên và tài khoản tương ứng
+                var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+                var user = await _context.Users.FindAsync(userId);
 
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật hồ sơ thành công" });
-        }
+                if (student == null) return NotFound(new { message = "Không tìm thấy hồ sơ sinh viên" });
 
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    // 3. Cập nhật bảng Students (Kiểm tra null trước khi Trim)
+                    student.FullName = dto.FullName?.Trim() ?? student.FullName;
+                    student.Phone = dto.Phone?.Trim();
+                    student.Address = dto.Address?.Trim();
+                    student.Email = dto.Email?.Trim();
+                    student.Birthday = dto.Birthday;
+
+                    // 4. Cập nhật bảng Users (Để đồng bộ tên hiển thị)
+                    if (user != null)
+                    {
+                        user.FullName = student.FullName; // Nếu bảng User m có cột này
+                        _context.Users.Update(user);
+                    }
+
+                    _context.Students.Update(student);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return Ok(new { message = "Cập nhật hồ sơ thành công!", fullName = student.FullName });
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    return StatusCode(500, new { message = "Lỗi hệ thống: " + ex.Message });
+                }
+            }
         // 5. Bảng điểm và Xếp loại (Đã fix lỗi s.Value -> s.DiemTrungBinh)
         [HttpGet("academic-summary")]
         public async Task<IActionResult> GetSummary()
@@ -165,7 +191,17 @@ namespace ConnectDB.Controllers
         public string Ranking { get; set; } = "";
         public List<SubjectGradeDto> SubjectDetails { get; set; } = new();
     }
-
+    namespace ConnectDB.DTO
+    {
+        public class StudentUpdateDto
+        {
+            public string FullName { get; set; } = string.Empty;
+            public string? Email { get; set; }
+            public string? Phone { get; set; }
+            public string? Address { get; set; }
+            public DateTime Birthday { get; set; }
+        }
+    }
     public class SubjectGradeDto
     {
         public string SubjectName { get; set; } = "";

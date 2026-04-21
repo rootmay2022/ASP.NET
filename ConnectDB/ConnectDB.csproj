@@ -10,6 +10,9 @@
 
   <ItemGroup>
     <Compile Remove="Controllers\ClassController.cs" />
+    <Compile Remove="DTO\ScoreCreateDto.cs" />
+    <Compile Remove="DTO\StudentUpdateDto.cs" />
+    <Compile Remove="DTO\SubjectDto.cs" />
   </ItemGroup>
 
   <ItemGroup>

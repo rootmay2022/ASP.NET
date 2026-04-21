@@ -342,6 +342,7 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
+        // 1. LẤY TẤT CẢ ĐIỂM (Dùng cho bảng quản lý chung)
         [HttpGet("scores")]
         public async Task<IActionResult> GetAllScores()
         {
@@ -351,6 +352,8 @@ namespace ConnectDB.Controllers
                 .Select(s => new
                 {
                     s.Id,
+                    StudentId = s.StudentId, // Trả về ID để React biết đường mà POST
+                    SubjectId = s.SubjectId,
                     StudentName = s.Student != null ? s.Student.FullName : "---",
                     SubjectName = s.Subject != null ? s.Subject.SubjectName : "---",
                     s.KT1,
@@ -365,6 +368,7 @@ namespace ConnectDB.Controllers
             return Ok(result);
         }
 
+        // 2. LẤY ĐIỂM RIÊNG CỦA 1 SINH VIÊN (Bơm thêm ID vào đây cho tao)
         [HttpGet("scores/student/{studentId}")]
         public async Task<IActionResult> GetScoreByStudent(int studentId)
         {
@@ -373,6 +377,8 @@ namespace ConnectDB.Controllers
                 .Include(s => s.Subject)
                 .Select(s => new {
                     s.Id,
+                    StudentId = s.StudentId, // Phải có cái này
+                    SubjectId = s.SubjectId, // Và cái này để React nó map dữ liệu
                     SubjectName = s.Subject != null ? s.Subject.SubjectName : "---",
                     s.KT1,
                     s.KT2,
@@ -388,27 +394,52 @@ namespace ConnectDB.Controllers
             return Ok(scores);
         }
 
+        // 3. CẬP NHẬT HOẶC THÊM MỚI ĐIỂM (Đã check kỹ logic)
         [HttpPost("scores")]
         public async Task<IActionResult> UpdateScore([FromBody] ScoreDto dto)
         {
+            // 1. CHẶN LỖI NULL: Nếu không có dữ liệu gửi lên thì báo lỗi ngay
+            if (dto == null)
+                return BadRequest(new { message = "Lỗi: Không nhận được dữ liệu điểm!" });
+
+            // 2. CHẶN ID GIẢ: Nếu ID bằng 0 hoặc âm thì không cho lưu
+            if (dto.StudentId <= 0 || dto.SubjectId <= 0)
+                return BadRequest(new { message = "Lỗi: ID Sinh viên hoặc Môn học không hợp lệ!" });
+
+            // Tìm xem đã có dòng điểm này chưa
             var score = await _context.Scores
                 .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId && s.SubjectId == dto.SubjectId);
 
             if (score == null)
             {
-                score = new Score { StudentId = dto.StudentId, SubjectId = dto.SubjectId };
+                // Nếu chưa có thì tạo mới dòng điểm
+                score = new Score
+                {
+                    StudentId = dto.StudentId,
+                    SubjectId = dto.SubjectId
+                };
                 _context.Scores.Add(score);
             }
 
+            // Gán điểm (Nhớ đảm bảo KT1, KT2, DiemThi trong DTO là kiểu float)
             score.KT1 = dto.KT1;
             score.KT2 = dto.KT2;
             score.DiemThi = dto.DiemThi;
 
+            // 3. TÍNH TOÁN: (KT1 + KT2 + Thi*2) / 4 và làm tròn 1 chữ số thập phân
             score.DiemTrungBinh = (float)Math.Round((score.KT1 + score.KT2 + score.DiemThi * 2) / 4, 1);
+
+            // Tự động xếp loại
             score.KetQua = score.DiemTrungBinh >= 5 ? "Qua môn" : "Học lại";
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã cập nhật điểm và tính toán xong!", dtb = score.DiemTrungBinh, ketQua = score.KetQua });
+
+            return Ok(new
+            {
+                message = "Đã cập nhật điểm và tính toán xong!",
+                dtb = score.DiemTrungBinh,
+                ketQua = score.KetQua
+            });
         }
 
         // ================= 8. HỆ THỐNG TÀI KHOẢN (USERS) =================
@@ -528,9 +559,26 @@ namespace ConnectDB.Controllers
 
         public string GetCode() => !string.IsNullOrWhiteSpace(StudentCode) ? StudentCode : (StudentId ?? string.Empty);
     }
+    // DÁN THÊM CỤC NÀY VÀO CUỐI FILE ADMINCONTROLLER.CS ĐỂ HẾT GẠCH ĐỎ
+    public class ScoreDto
+    {
+        public int StudentId { get; set; }
+        public int SubjectId { get; set; }
+        public float KT1 { get; set; }
+        public float KT2 { get; set; }
+        public float DiemThi { get; set; }
+    }
+    public class StudentUpdateDto
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public DateTime Birthday { get; set; }
+    }
+}
 
-    public class ReactChangePassReq
+public class ReactChangePassReq
     {
         public string NewPassword { get; set; }
     }
-}
