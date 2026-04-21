@@ -238,20 +238,25 @@ namespace ConnectDB.Controllers
         // ================= 4. GIẢNG VIÊN (TEACHER) =================
         [HttpGet("teachers")]
         public async Task<IActionResult> GetTeachers() => Ok(await _context.Teachers.ToListAsync());
-
+        // ================= 4. GIẢNG VIÊN (TEACHER) =================
         [HttpPost("teachers")]
         public async Task<IActionResult> AddTeacher([FromBody] CreateTeacherDto dto)
         {
-            if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
-                return BadRequest(new { message = "Tài khoản giảng viên đã tồn tại!" });
+            // TỰ ĐỘNG TẠO USERNAME TỪ EMAIL NẾU REACT KHÔNG GỬI LÊN
+            string username = string.IsNullOrWhiteSpace(dto.Username)
+                ? (dto.Email != null ? dto.Email.Split('@')[0] : "gv_" + DateTime.Now.ToString("mmss"))
+                : dto.Username;
+
+            if (await _context.Users.AnyAsync(u => u.Username == username))
+                return BadRequest(new { message = $"Tài khoản '{username}' đã tồn tại! Vui lòng dùng email khác." });
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var newUser = new User
                 {
-                    Username = dto.Username,
-                    Password = dto.Password ?? "123", // ĐÃ TẮT MÃ HÓA
+                    Username = username,
+                    Password = dto.Password ?? "123", // Vẫn giữ pass thuần 123
                     Role = "Teacher",
                     FullName = dto.FullName
                 };
@@ -268,15 +273,15 @@ namespace ConnectDB.Controllers
                 _context.Teachers.Add(t);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
-                return Ok(new { message = "Thêm giảng viên thành công!" });
+
+                return Ok(new { message = $"Thêm thành công! Tên đăng nhập của GV là: {username}" });
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return BadRequest(ex.Message);
+                return BadRequest(new { message = "Lỗi Backend: " + ex.Message });
             }
         }
-
         [HttpDelete("teachers/{id}")]
         public async Task<IActionResult> DeleteTeacher(int id)
         {
