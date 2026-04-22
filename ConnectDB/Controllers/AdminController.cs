@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace ConnectDB.Controllers
 {
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Teacher")]
     [ApiController]
     [Route("api/[controller]")]
     public class AdminController : ControllerBase
