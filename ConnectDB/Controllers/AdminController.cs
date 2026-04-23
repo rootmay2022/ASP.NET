@@ -507,15 +507,15 @@ namespace ConnectDB.Controllers
         [HttpGet("leave-requests")]
         public async Task<IActionResult> GetLeaveRequests()
         {
+            // Đảm bảo ở đầu file có: using Microsoft.EntityFrameworkCore;
             var requests = await _context.LeaveRequests
-                .Include(r => r.Teacher)
-                .ThenInclude(t => t.User)
+                .Include(r => r.Teacher)             // Giờ mới Include được nè
+                    .ThenInclude(t => t.User)        // Lấy tiếp User để lấy FullName
                 .OrderByDescending(r => r.CreatedAt)
                 .Select(r => new {
                     Id = r.Id,
-                    // Thêm dấu ? để nếu r.Teacher hoặc User bị null thì nó không làm chết cả danh sách
-                    TeacherName = r.Teacher != null && r.Teacher.User != null ? r.Teacher.User.FullName : "Giảng viên ẩn danh",
-                    TeacherCode = r.Teacher != null ? r.Teacher.TeacherCode : "N/A",
+                    // Check null cẩn thận kẻo lại sập app
+                    TeacherName = r.Teacher != null && r.Teacher.User != null ? r.Teacher.User.FullName : "GV Ẩn Danh",
                     OffDate = r.OffDate,
                     Reason = r.Reason,
                     Status = r.Status
