@@ -120,7 +120,7 @@ namespace ConnectDB.Controllers
             try
             {
                 // ⚠️ CHÚ Ý: MÀY PHẢI THAY EMAIL VÀ APP PASSWORD CỦA MÀY VÀO 2 DÒNG DƯỚI NÀY
-                string myEmail = "nguyenkhanhhung@gmail.com";
+                string myEmail = "nguyenkhanhhung1531@gmail.com";
                 string myAppPassword = "jqfdhderekmhmhwi";
 
                 var mail = new MailMessage(myEmail, userEmail);
@@ -129,6 +129,7 @@ namespace ConnectDB.Controllers
 
                 var smtp = new SmtpClient("smtp.gmail.com", 587)
                 {
+                    UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(myEmail, myAppPassword),
                     EnableSsl = true
                 };
