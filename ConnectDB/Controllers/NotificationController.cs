@@ -47,24 +47,23 @@ public class NotificationController : ControllerBase
     [HttpGet("my-notifications")]
     public async Task<IActionResult> GetMyNotifications()
     {
-        // Sử dụng dấu ? để tránh lỗi null reference
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
         if (string.IsNullOrEmpty(userIdClaim) || string.IsNullOrEmpty(roleClaim))
-        {
             return Unauthorized("Vui lòng đăng nhập!");
-        }
 
         int userId = int.Parse(userIdClaim);
         string role = roleClaim;
 
-        // Truy vấn thông báo
         var notifications = await _context.Notifications
-            .Where(n => (n.TargetType == role && (n.TargetId == userId || n.TargetId == 0))
-                     || (role == "Student" && n.TargetType == "Class" && _context.Students.Any(s => s.UserId == userId && s.ClassId == n.ClassId)))
+            .Where(n =>
+                n.TargetType == "All" || // 1. Thông báo Toàn trường (Ai cũng thấy)
+                (n.TargetType == role && (n.TargetId == userId || n.TargetId == 0 || n.TargetId == null)) || // 2. Gửi riêng cho mình HOẶC gửi cho tất cả người cùng Role (GV/SV)
+                (role == "Student" && n.TargetType == "Class" && _context.Students.Any(s => s.UserId == userId && s.ClassId == n.ClassId)) // 3. Gửi riêng cho lớp (SV mới thấy)
+            )
             .OrderByDescending(n => n.CreatedAt)
-            .ToListAsync(); // Hết lỗi nhờ "using Microsoft.EntityFrameworkCore"
+            .ToListAsync();
 
         return Ok(notifications);
     }
