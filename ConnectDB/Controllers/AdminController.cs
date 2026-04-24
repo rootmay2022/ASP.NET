@@ -490,7 +490,6 @@ namespace ConnectDB.Controllers
         [HttpPut("leave-requests/approve/{id}")]
         public async Task<IActionResult> ApproveLeaveRequest(int id)
         {
-            // Sử dụng Transaction để đảm bảo: Duyệt đơn được thì Lịch cũng phải đổi được
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -502,12 +501,20 @@ namespace ConnectDB.Controllers
                 request.Status = "Approved";
 
                 // 3. LOGIC QUAN TRỌNG: Tự động cập nhật Lịch dạy/Học
-                // Tìm tất cả các ca học của ông thầy này trong đúng cái ngày ông ấy xin nghỉ (OffDate)
+                // Lấy ngày, tháng, năm cụ thể để so sánh (Tránh lỗi lệch múi giờ UTC trên Render)
+                int targetYear = request.OffDate.Year;
+                int targetMonth = request.OffDate.Month;
+                int targetDay = request.OffDate.Day;
+
+                // Quét lịch học: So khớp chính xác ID Giảng viên và Năm/Tháng/Ngày
                 var affectedSchedules = await _context.Schedules
-                    .Where(s => s.TeacherId == request.TeacherId && s.LearnDate.Date == request.OffDate.Date)
+                    .Where(s => s.TeacherId == request.TeacherId
+                             && s.LearnDate.Year == targetYear
+                             && s.LearnDate.Month == targetMonth
+                             && s.LearnDate.Day == targetDay)
                     .ToListAsync();
 
-                // Ghi đè chữ "TẠM DỪNG" vào cột Ghi chú (Note)
+                // Ghi đè chữ "TẠM DỪNG" vào cột Note
                 foreach (var schedule in affectedSchedules)
                 {
                     schedule.Note = "TẠM DỪNG - GV NGHỈ PHÉP";
@@ -517,7 +524,7 @@ namespace ConnectDB.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(new { message = $"Đã duyệt đơn! Hệ thống đã tự động tạm dừng {affectedSchedules.Count} ca học của ngày hôm đó." });
+                return Ok(new { message = $"Đã duyệt đơn! Đã tạm dừng {affectedSchedules.Count} ca học." });
             }
             catch (Exception ex)
             {
