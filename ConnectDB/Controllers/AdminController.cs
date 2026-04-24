@@ -1,9 +1,10 @@
 ﻿#pragma warning disable CS8602 // Bịt miệng lỗi Dereference of possibly null
 #pragma warning disable CS8618 // Bịt miệng lỗi Non-nullable property
 #pragma warning disable CS8629 // Bịt miệng lỗi Nullable value type
+
 using ConnectDB.Data;
 using ConnectDB.Models;
-using ConnectDB.DTO;
+// using ConnectDB.DTO; // Mở comment dòng này nếu mày có thư mục DTO riêng
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -59,7 +60,8 @@ namespace ConnectDB.Controllers
         public async Task<IActionResult> GetSubjects()
         {
             var subjects = await _context.Subjects
-                .Select(s => new {
+                .Select(s => new
+                {
                     s.Id,
                     s.SubjectName,
                     s.Credits,
@@ -104,7 +106,8 @@ namespace ConnectDB.Controllers
         {
             var students = await _context.Students
                 .Include(s => s.Class)
-                .Select(s => new {
+                .Select(s => new
+                {
                     Id = s.Id,
                     StudentCode = s.StudentCode,
                     StudentId = s.StudentCode,
@@ -135,7 +138,7 @@ namespace ConnectDB.Controllers
                 var newUser = new User
                 {
                     Username = maSV,
-                    Password = "123", // ĐÃ TẮT MÃ HÓA
+                    Password = "123",
                     Role = "Student"
                 };
                 _context.Users.Add(newUser);
@@ -239,17 +242,16 @@ namespace ConnectDB.Controllers
         // ================= 4. GIẢNG VIÊN (TEACHER) =================
         [HttpGet("teachers")]
         public async Task<IActionResult> GetTeachers() => Ok(await _context.Teachers.ToListAsync());
-        // ================= 4. GIẢNG VIÊN (TEACHER) =================
+
         [HttpPost("teachers")]
         public async Task<IActionResult> AddTeacher([FromBody] CreateTeacherDto dto)
         {
-            // TỰ ĐỘNG TẠO USERNAME TỪ EMAIL NẾU REACT KHÔNG GỬI LÊN
             string username = string.IsNullOrWhiteSpace(dto.Username)
                 ? (dto.Email != null ? dto.Email.Split('@')[0] : "gv_" + DateTime.Now.ToString("mmss"))
                 : dto.Username;
 
             if (await _context.Users.AnyAsync(u => u.Username == username))
-                return BadRequest(new { message = $"Tài khoản '{username}' đã tồn tại! Vui lòng dùng email khác." });
+                return BadRequest(new { message = $"Tài khoản '{username}' đã tồn tại!" });
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
@@ -257,7 +259,7 @@ namespace ConnectDB.Controllers
                 var newUser = new User
                 {
                     Username = username,
-                    Password = dto.Password ?? "123", // Vẫn giữ pass thuần 123
+                    Password = dto.Password ?? "123",
                     Role = "Teacher",
                     FullName = dto.FullName
                 };
@@ -275,7 +277,7 @@ namespace ConnectDB.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(new { message = $"Thêm thành công! Tên đăng nhập của GV là: {username}" });
+                return Ok(new { message = $"Thêm thành công! Username: {username}" });
             }
             catch (Exception ex)
             {
@@ -283,6 +285,7 @@ namespace ConnectDB.Controllers
                 return BadRequest(new { message = "Lỗi Backend: " + ex.Message });
             }
         }
+
         [HttpDelete("teachers/{id}")]
         public async Task<IActionResult> DeleteTeacher(int id)
         {
@@ -306,13 +309,11 @@ namespace ConnectDB.Controllers
                 .Include(s => s.Class)
                 .AsQueryable();
 
-            if (classId.HasValue)
-            {
-                query = query.Where(s => s.ClassId == classId.Value);
-            }
+            if (classId.HasValue) query = query.Where(s => s.ClassId == classId.Value);
 
             var result = await query
-                .Select(s => new {
+                .Select(s => new
+                {
                     s.Id,
                     Học_Ngày = s.LearnDate,
                     Ca_Học = s.Slot,
@@ -342,9 +343,6 @@ namespace ConnectDB.Controllers
         }
 
         // ================= 7. ĐIỂM SỐ (SCORE) =================
-        // ================= 7. ĐIỂM SỐ (SCORE) =================
-
-        // 1. Lấy tất cả điểm (Đảm bảo trả về ID để React có dữ liệu gán ngược lại)
         [HttpGet("scores")]
         public async Task<IActionResult> GetAllScores()
         {
@@ -354,7 +352,7 @@ namespace ConnectDB.Controllers
                 .Select(s => new
                 {
                     s.Id,
-                    studentId = s.StudentId, // Viết thường chữ đầu để khớp React
+                    studentId = s.StudentId,
                     subjectId = s.SubjectId,
                     studentName = s.Student != null ? s.Student.FullName : "---",
                     subjectName = s.Subject != null ? s.Subject.SubjectName : "---",
@@ -370,81 +368,51 @@ namespace ConnectDB.Controllers
             return Ok(result);
         }
 
-        // 2. Lưu hoặc Cập nhật điểm (Đã bọc bẫy lỗi 500)
         [HttpPost("scores")]
         public async Task<IActionResult> UpdateScore([FromBody] ScoreDto dto)
         {
             if (dto == null) return BadRequest(new { message = "Dữ liệu trống!" });
-
-            // Chặn ID ảo
-            if (dto.StudentId <= 0 || dto.SubjectId <= 0)
-                return BadRequest(new { message = "ID Sinh viên hoặc Môn học không tồn tại!" });
-
             try
             {
-                // Kiểm tra xem đã có dòng điểm này chưa
                 var score = await _context.Scores
                     .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId && s.SubjectId == dto.SubjectId);
 
                 if (score == null)
                 {
-                    // Nếu chưa có thì tạo mới
-                    score = new Score
-                    {
-                        StudentId = dto.StudentId,
-                        SubjectId = dto.SubjectId
-                    };
+                    score = new Score { StudentId = dto.StudentId, SubjectId = dto.SubjectId };
                     _context.Scores.Add(score);
                 }
 
-                // Gán giá trị điểm từ DTO
                 score.KT1 = dto.KT1;
                 score.KT2 = dto.KT2;
                 score.DiemThi = dto.DiemThi;
-
-                // Tính toán trung bình (KT1 + KT2 + Thi*2) / 4
                 score.DiemTrungBinh = (float)Math.Round((score.KT1 + score.KT2 + score.DiemThi * 2) / 4, 1);
                 score.KetQua = score.DiemTrungBinh >= 5 ? "Qua môn" : "Học lại";
 
-                // Lưu xuống Database
                 await _context.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    message = "Lưu điểm thành công!",
-                    dtb = score.DiemTrungBinh,
-                    ketQua = score.KetQua
-                });
+                return Ok(new { message = "Lưu điểm thành công!", dtb = score.DiemTrungBinh, ketQua = score.KetQua });
             }
             catch (Exception ex)
             {
-                // Nếu bị lỗi 500, dòng này sẽ phun ra lỗi THẬT của Database ở tab Response
-                var errorDetail = ex.InnerException?.Message ?? ex.Message;
-                return StatusCode(500, new
-                {
-                    message = "Lỗi Database rồi m ơi!",
-                    detail = errorDetail
-                });
+                return StatusCode(500, new { message = "Lỗi Database!", detail = ex.Message });
             }
         }
+
         // ================= 8. HỆ THỐNG TÀI KHOẢN (USERS) =================
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers()
         {
             var users = await _context.Users
-                .Select(u => new {
+                .Select(u => new
+                {
                     Id = u.Id,
                     Username = u.Username,
                     Role = u.Role,
-                    FacultyId = u.Role == "Student"
-                        ? _context.Students.Where(s => s.UserId == u.Id).Select(s => (int?)s.Class.FacultyId).FirstOrDefault()
-                        : null,
                     FacultyName = u.Role == "Student"
                         ? _context.Students.Where(s => s.UserId == u.Id).Select(s => s.Class.Faculty.FacultyName).FirstOrDefault()
                         : "---"
                 })
                 .ToListAsync();
-
             return Ok(users);
         }
 
@@ -453,7 +421,7 @@ namespace ConnectDB.Controllers
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound();
-            user.Password = "123"; // ĐÃ TẮT MÃ HÓA
+            user.Password = "123";
             await _context.SaveChangesAsync();
             return Ok(new { message = "Mật khẩu đã reset về 123" });
         }
@@ -463,24 +431,20 @@ namespace ConnectDB.Controllers
         {
             if (await _context.Users.AnyAsync(x => x.Username == u.Username))
                 return BadRequest(new { message = "Username đã tồn tại!" });
-
-            u.Password = u.Password ?? "123"; // ĐÃ TẮT MÃ HÓA
+            u.Password = u.Password ?? "123";
             _context.Users.Add(u);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Tạo tài khoản thành công!" });
         }
 
-        [HttpPut("users/{id}")]
-        public async Task<IActionResult> UpdateUser(int id, [FromBody] User u)
+        [HttpDelete("users/{id}")]
+        public async Task<IActionResult> DeleteUser(int id)
         {
-            var userDb = await _context.Users.FindAsync(id);
-            if (userDb == null) return NotFound();
-            userDb.Username = u.Username;
-            userDb.Role = u.Role;
-            if (!string.IsNullOrEmpty(u.Password))
-                userDb.Password = u.Password; // ĐÃ TẮT MÃ HÓA
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+            _context.Users.Remove(user);
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật thành công" });
+            return Ok(new { message = "Đã xóa tài khoản!" });
         }
 
         [HttpPut("users/{id}/password")]
@@ -488,90 +452,88 @@ namespace ConnectDB.Controllers
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound(new { message = "Không tìm thấy tài khoản!" });
-
-            user.Password = dto.NewPassword; // ĐÃ TẮT MÃ HÓA
+            user.Password = dto.NewPassword;
             await _context.SaveChangesAsync();
             return Ok(new { message = "Đổi mật khẩu thành công!" });
         }
-        [HttpPut("leave-requests/approve/{id}")]
-        public async Task<IActionResult> ApproveLeaveRequest(int id)
-        {
-            // 1. Tìm cái đơn dựa trên ID truyền vào từ URL
-            var request = await _context.LeaveRequests.FindAsync(id);
 
-            if (request == null)
-            {
-                return NotFound(new { message = "Đéo tìm thấy cái đơn nào có ID này m ơi!" });
-            }
+        // ================= 9. QUẢN LÝ NGHỈ PHÉP (LEAVE REQUESTS) - ĐÃ FIX CHUẨN =================
 
-            // 2. Cập nhật trạng thái thành 'Approved'
-            request.Status = "Approved";
-
-            try
-            {
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Đã duyệt đơn thành công! Giáo viên sẽ thấy trạng thái mới." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Lỗi khi lưu vào DB: " + ex.Message });
-            }
-        }
-        [HttpDelete("users/{id}")]
-        public async Task<IActionResult> DeleteUser(int id)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound();
-
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã xóa tài khoản!" });
-        }
+        // Xem danh sách đơn nghỉ phép (Có check NULL an toàn để không văng 500)
         [HttpGet("leave-requests")]
         public async Task<IActionResult> GetLeaveRequests()
         {
-            // Đảm bảo ở đầu file có: using Microsoft.EntityFrameworkCore;
-            var requests = await _context.LeaveRequests
-                .Include(r => r.Teacher)             // Giờ mới Include được nè
-                    .ThenInclude(t => t.User)        // Lấy tiếp User để lấy FullName
-                .OrderByDescending(r => r.CreatedAt)
-                .Select(r => new {
-                    Id = r.Id,
-                    // Check null cẩn thận kẻo lại sập app
-                    TeacherName = r.Teacher != null && r.Teacher.User != null ? r.Teacher.User.FullName : "GV Ẩn Danh",
-                    OffDate = r.OffDate,
-                    Reason = r.Reason,
-                    Status = r.Status
-                })
-                .ToListAsync();
-
-            return Ok(requests);
+            try
+            {
+                var requests = await _context.LeaveRequests
+                    .Include(r => r.Teacher).ThenInclude(t => t.User)
+                    .OrderByDescending(r => r.CreatedAt)
+                    .Select(r => new
+                    {
+                        Id = r.Id,
+                        TeacherName = (r.Teacher != null && r.Teacher.User != null) ? r.Teacher.User.FullName : "GV không xác định",
+                        OffDate = r.OffDate,
+                        Reason = r.Reason,
+                        Status = r.Status
+                    })
+                    .ToListAsync();
+                return Ok(requests);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Lỗi Fetch: {ex.Message}");
+            }
         }
 
-        // ================= 9. NGHIỆP VỤ ĐẶC BIỆT =================
+        // Duyệt đơn nghỉ phép
         [HttpPut("leave-requests/approve/{id}")]
-        public async Task<IActionResult> ApproveLeave(int id)
+        public async Task<IActionResult> ApproveLeaveRequest(int id)
         {
-            var request = await _context.LeaveRequests.FindAsync(id);
-            if (request == null) return NotFound();
+            try
+            {
+                var request = await _context.LeaveRequests.FindAsync(id);
+                if (request == null) return NotFound(new { message = "Không tìm thấy đơn ID: " + id });
 
-            request.Status = "Approved";
-            var busySchedules = await _context.Schedules.Where(s => s.TeacherId == request.TeacherId && s.Date.Date == request.OffDate.Date).ToListAsync();
-
-            foreach (var item in busySchedules) item.Note = "GIẢNG VIÊN NGHỈ - LỚP TỰ HỌC";
-
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Duyệt nghỉ thành công!" });
+                request.Status = "Approved";
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Đã duyệt đơn thành công!" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Lỗi xử lý duyệt: {ex.Message}");
+            }
         }
-    }
 
-    // --- CÁC CLASS DTO CẦN THIẾT ---
-    public class SubjectCreateDto
-    {
-        public string SubjectName { get; set; }
-        public int Credits { get; set; }
-        public int FacultyId { get; set; }
-    }
+        // Từ chối đơn nghỉ phép
+        [HttpPut("leave-requests/reject/{id}")]
+        public async Task<IActionResult> RejectLeaveRequest(int id)
+        {
+            try
+            {
+                var request = await _context.LeaveRequests.FindAsync(id);
+                if (request == null) return NotFound(new { message = "Không tìm thấy đơn ID: " + id });
+
+                request.Status = "Rejected";
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Đã từ chối đơn!" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Lỗi xử lý từ chối: {ex.Message}");
+            }
+        }
+
+    } // HẾT PHẦN CONTROLLER CHÍNH - BẮT ĐẦU PHẦN DTO
+
+    // ================= DTO CLASSES CẦN THIẾT ĐỂ KHÔNG BỊ BÁO LỖI =================
+
+    public class FacultyDto { public string FacultyName { get; set; } }
+
+    public class SubjectCreateDto { public string SubjectName { get; set; } public int Credits { get; set; } public int FacultyId { get; set; } }
+
+    public class ClassCreateDto { public string ClassName { get; set; } public int FacultyId { get; set; } }
+
+    public class CreateTeacherDto { public string? Username { get; set; } public string? Password { get; set; } public string FullName { get; set; } public string? Email { get; set; } }
 
     public class SyncStudent_Req
     {
@@ -584,10 +546,10 @@ namespace ConnectDB.Controllers
         public string? Email { get; set; }
         public string? Address { get; set; }
         public int ClassId { get; set; }
-
         public string GetCode() => !string.IsNullOrWhiteSpace(StudentCode) ? StudentCode : (StudentId ?? string.Empty);
     }
-    // DÁN THÊM CỤC NÀY VÀO CUỐI FILE ADMINCONTROLLER.CS ĐỂ HẾT GẠCH ĐỎ
+
+    // ĐÂY LÀ THẰNG SCOREDTO MÀ MÀY BỊ BÁO LỖI NÈ
     public class ScoreDto
     {
         public int StudentId { get; set; }
@@ -597,17 +559,5 @@ namespace ConnectDB.Controllers
         public float DiemThi { get; set; }
     }
 
-    public class StudentUpdateDto
-    {
-        public string FullName { get; set; } = string.Empty;
-        public string? Email { get; set; }
-        public string? Phone { get; set; }
-        public string? Address { get; set; }
-        public DateTime Birthday { get; set; }
-    }
+    public class ReactChangePassReq { public string NewPassword { get; set; } }
 }
-
-public class ReactChangePassReq
-    {
-        public string NewPassword { get; set; }
-    }

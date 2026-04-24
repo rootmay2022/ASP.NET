@@ -80,7 +80,7 @@ namespace ConnectDB.Controllers
 
         // ================= 3. NHẬP & SỬA ĐIỂM (Đã fix lỗi Value) =================
         [HttpPost("submit-scores")]
-        public async Task<IActionResult> SubmitScore([FromBody] ScoreDto dto)
+        public async Task<IActionResult> SubmitScore([FromBody] Score dto)
         {
             var teacherId = GetCurrentTeacherId();
 
