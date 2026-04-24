@@ -466,18 +466,19 @@ namespace ConnectDB.Controllers
             try
             {
                 var requests = await _context.LeaveRequests
-                    .Include(r => r.Teacher).ThenInclude(t => t.User)
-                    // SỬA DÒNG NÀY: Thay r.CreatedAt thành r.Id
+                    .Include(r => r.Teacher) // Chỉ cần gọi Teacher là đủ
                     .OrderByDescending(r => r.Id)
                     .Select(r => new
                     {
                         Id = r.Id,
-                        TeacherName = (r.Teacher != null && r.Teacher.User != null) ? r.Teacher.User.FullName : "GV không xác định",
+                        // Lấy thẳng FullName từ bảng Teacher, đéo cần qua User nữa!
+                        TeacherName = r.Teacher != null ? r.Teacher.FullName : $"Lỗi ID {r.TeacherId}",
                         OffDate = r.OffDate,
                         Reason = r.Reason,
                         Status = r.Status
                     })
                     .ToListAsync();
+
                 return Ok(requests);
             }
             catch (Exception ex)
@@ -485,7 +486,6 @@ namespace ConnectDB.Controllers
                 return StatusCode(500, $"Lỗi Fetch: {ex.Message}");
             }
         }
-
         // Duyệt đơn nghỉ phép
         [HttpPut("leave-requests/approve/{id}")]
         public async Task<IActionResult> ApproveLeaveRequest(int id)
