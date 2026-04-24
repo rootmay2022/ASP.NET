@@ -12,5 +12,5 @@ public class LeaveRequest
     public DateTime OffDate { get; set; }
     public string? Reason { get; set; }
     public string Status { get; set; } = "Pending";
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    //public DateTime CreatedAt { get; set; } = DateTime.Now;
 }

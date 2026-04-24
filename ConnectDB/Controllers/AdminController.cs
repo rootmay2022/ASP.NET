@@ -493,37 +493,36 @@ namespace ConnectDB.Controllers
             try
             {
                 var request = await _context.LeaveRequests.FindAsync(id);
-                if (request == null) return NotFound(new { message = "Không tìm thấy đơn ID: " + id });
+                if (request == null) return NotFound(new { message = "Không tìm thấy đơn!" });
 
                 request.Status = "Approved";
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(); // Lệnh này sẽ hết lỗi sau khi m sửa Model ở Bước 1
                 return Ok(new { message = "Đã duyệt đơn thành công!" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Lỗi xử lý duyệt: {ex.Message}");
+                // Trả về object JSON để Frontend hiện được lỗi thật (ex.Message)
+                return StatusCode(500, new { message = "Lỗi C#: " + ex.Message });
             }
         }
 
-        // Từ chối đơn nghỉ phép
         [HttpPut("leave-requests/reject/{id}")]
         public async Task<IActionResult> RejectLeaveRequest(int id)
         {
             try
             {
                 var request = await _context.LeaveRequests.FindAsync(id);
-                if (request == null) return NotFound(new { message = "Không tìm thấy đơn ID: " + id });
+                if (request == null) return NotFound(new { message = "Không tìm thấy đơn!" });
 
                 request.Status = "Rejected";
                 await _context.SaveChangesAsync();
-                return Ok(new { message = "Đã từ chối đơn!" });
+                return Ok(new { message = "Đã từ chối đơn thành công!" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Lỗi xử lý từ chối: {ex.Message}");
+                return StatusCode(500, new { message = "Lỗi C#: " + ex.Message });
             }
         }
-
     } // HẾT PHẦN CONTROLLER CHÍNH - BẮT ĐẦU PHẦN DTO
 
     // ================= DTO CLASSES CẦN THIẾT ĐỂ KHÔNG BỊ BÁO LỖI =================
